@@ -43,8 +43,14 @@ class OfferListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method.upper() == "POST":
-            return [permissions.IsAuthenticated(), IsBusinessUser()]
+            # Before: return [permissions.IsAuthenticated(), IsBusinessUser()]
+            return [permissions.IsAuthenticated()]
         return [permissions.AllowAny()]
+
+    #def get_permissions(self):
+     #   if self.request.method.upper() == "POST":
+      #      return [permissions.IsAuthenticated(), IsBusinessUser()]
+       # return [permissions.AllowAny()]
 
     def get_serializer_class(self):
         if self.request.method.upper() == "POST":
