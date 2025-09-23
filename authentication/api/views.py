@@ -1,4 +1,6 @@
 from django.contrib.auth import authenticate
+from django.db import IntegrityError, transaction
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
@@ -15,20 +17,25 @@ class RegistrationView(APIView):
         serializer = RegistrationSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
         try:
-            user = serializer.save()
+            with transaction.atomic():
+                user = serializer.save()
+        except IntegrityError:
+            return Response({"detail": "Benutzername oder E-Mail existiert bereits."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
             return Response({"detail": "Interner Serverfehler."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         token, _ = Token.objects.get_or_create(user=user)
-        data = {
-            "token": token.key,
-            "username": user.username,
-            "email": user.email,
-            "user_id": user.pk,
-        }
-        return Response(data, status=status.HTTP_201_CREATED)
+        return Response(
+            {
+                "token": token.key,
+                "username": user.username,
+                "email": user.email,
+                "user_id": user.pk,
+                "type": user.type,
+            },
+            status=status.HTTP_201_CREATED
+        )
 
 
 class LoginView(APIView):
