@@ -7,7 +7,7 @@ from offers.models import OfferDetail
 
 class OrderSerializer(serializers.ModelSerializer):
     """
-    Output serializer matching the success response spec.
+    Output serializer used for list, create result, and patch result.
     """
     class Meta:
         model = Order
@@ -35,7 +35,8 @@ class OrderCreateSerializer(serializers.Serializer):
     offer_detail_id = serializers.IntegerField(required=True, min_value=1)
 
     def validate_offer_detail_id(self, value):
-        # Existence is checked in create() to return 404 semantics.
+        # Existence is checked in create() to keep a clean error message;
+        # swap to view-level NotFound if you want strict 404 semantics.
         return value
 
     @transaction.atomic
@@ -44,7 +45,8 @@ class OrderCreateSerializer(serializers.Serializer):
         user = getattr(request, "user", None)
         offer_detail_id = validated_data["offer_detail_id"]
 
-        # 404 if offer detail is missing
+        # 404 if offer detail is missing (serializer ValidationError yields 400 by default;
+        # if you want strict 404, move this to the view and raise NotFound)
         try:
             od = OfferDetail.objects.select_related("offer__owner").get(pk=offer_detail_id)
         except OfferDetail.DoesNotExist:
@@ -55,7 +57,7 @@ class OrderCreateSerializer(serializers.Serializer):
 
         business_user = od.offer.owner
 
-        # 403: user cannot order own offer
+        # 403-like: prevent ordering own offer
         if user.id == business_user.id:
             raise serializers.ValidationError(
                 {"non_field_errors": "You cannot order your own offer."},
@@ -78,5 +80,35 @@ class OrderCreateSerializer(serializers.Serializer):
         return order
 
     def to_representation(self, instance):
-        # Reuse the output serializer
+        return OrderSerializer(instance, context=self.context).data
+
+
+class OrderStatusUpdateSerializer(serializers.ModelSerializer):
+    """
+    For PATCH /api/orders/{id}/
+    - Only 'status' is allowed in the payload.
+    - Validates against model choices.
+    - Returns FULL order payload after update.
+    """
+    class Meta:
+        model = Order
+        fields = ["status"]
+
+    def validate(self, attrs):
+        # Reject any unexpected fields (e.g., title, price, etc.)
+        extra_keys = set(self.initial_data.keys()) - {"status"}
+        if extra_keys:
+            raise serializers.ValidationError(
+                {"non_field_errors": f"Only 'status' can be updated. Unexpected fields: {', '.join(sorted(extra_keys))}."}
+            )
+        return attrs
+
+    def update(self, instance, validated_data):
+        # Only status is allowed here
+        instance.status = validated_data["status"]
+        instance.save(update_fields=["status", "updated_at"])
+        return instance
+
+    def to_representation(self, instance):
+        # Return the full order object as per success response
         return OrderSerializer(instance, context=self.context).data
