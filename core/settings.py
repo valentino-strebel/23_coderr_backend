@@ -43,7 +43,8 @@ INSTALLED_APPS = [
     "offers",
     "analytics",
     "orders",
-    
+    "reviews",
+    "userprofile"
 ]
 
 AUTH_USER_MODEL = "authentication.User"
