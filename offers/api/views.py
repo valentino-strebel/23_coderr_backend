@@ -10,7 +10,7 @@ from .serializers import (
     OfferDetailRetrieveSerializer,
     OfferUpdateSerializer,
 )
-from .permissions import IsBusinessUser, IsOfferOwner
+from core.permissions import IsBusinessUser, IsOfferOwner
 
 
 class OfferPagination(PageNumberPagination):

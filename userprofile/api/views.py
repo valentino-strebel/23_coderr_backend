@@ -5,7 +5,7 @@ from .serializers import (
     BusinessProfileListSerializer,
     CustomerProfileListSerializer,
 )
-from .permissions import IsProfileOwnerOrReadOnly
+from core.permissions import IsProfileOwnerOrReadOnly
 
 
 class ProfileRetrieveUpdateView(generics.RetrieveUpdateAPIView):

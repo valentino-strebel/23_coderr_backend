@@ -2,7 +2,7 @@ from rest_framework import generics, parsers, permissions, filters
 
 from reviews.models import Review
 from .serializers import ReviewCreateSerializer, ReviewSerializer, ReviewUpdateSerializer
-from .permissions import IsCustomerUser, IsReviewOwner
+from core.permissions import IsCustomerUser, IsReviewOwner
 
 
 class ReviewListCreateView(generics.ListCreateAPIView):

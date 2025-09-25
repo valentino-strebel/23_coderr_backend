@@ -9,7 +9,7 @@ from .serializers import (
     OrderSerializer,
     OrderStatusUpdateSerializer,
 )
-from .permissions import IsCustomerUser, IsOrderBusinessUser
+from core.permissions import IsCustomerUser, IsOrderBusinessUser
 
 
 class OrderListCreateView(generics.ListCreateAPIView):
