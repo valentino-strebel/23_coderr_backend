@@ -77,7 +77,7 @@ def _user_matches_role(
     user: Any,
     role_strings: Iterable[str],
     role_numbers: Iterable[int] = (),
-    user_role_attr: str = "user_type",
+    user_role_attr: str = "type",          # <-- was "user_type"
     profile_attr: str = "profile",
     profile_role_attr: str = "type",
 ) -> bool:
