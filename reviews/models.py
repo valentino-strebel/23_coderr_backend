@@ -1,11 +1,28 @@
+"""
+@file models.py
+@description
+    Defines the Review model, representing customer feedback for business users.
+"""
+
 from django.conf import settings
 from django.db import models
 
 
 class Review(models.Model):
     """
-    A review left by a customer for a business user.
-    Enforces one review per (reviewer, business_user).
+    @model Review
+    @description
+        A review left by a customer for a business user.
+        Each (reviewer, business_user) pair may only have one review.
+    @fields
+        business_user {FK<User>} - The business user being reviewed
+        reviewer {FK<User>} - The customer writing the review
+        rating {int} - Numeric rating (1–5)
+        description {string} - Optional text feedback
+        created_at {datetime} - Timestamp when the review was created
+        updated_at {datetime} - Timestamp when the review was last updated
+    @constraints
+        unique_review_per_business_and_reviewer - Prevents duplicate reviews
     """
     business_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

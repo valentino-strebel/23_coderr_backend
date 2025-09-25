@@ -9,14 +9,32 @@ from offers.models import Offer
 
 class BaseInfoView(generics.GenericAPIView):
     """
+    @endpoint
+    @name Base Info
+    @route GET /api/base-info/
+    @auth None (public endpoint)
+    @description
+        Provides general statistics about reviews, ratings, business profiles, and offers.
+
+    @returns {Object} 200 - Success response
+    @returns {number} review_count - Total number of reviews
+    @returns {float} average_rating - Average rating across all reviews (rounded to 1 decimal)
+    @returns {number} business_profile_count - Number of users with user_type="business"
+    @returns {number} offer_count - Total number of offers
+
+    @example
+    # Request:
     GET /api/base-info/
-    - No authentication required
-    - Returns:
-        review_count: total number of reviews
-        average_rating: average rating across all reviews, rounded to 1 decimal
-        business_profile_count: number of users with type='business'
-        offer_count: total number of offers
+
+    # Response 200:
+    {
+        "review_count": 128,
+        "average_rating": 4.3,
+        "business_profile_count": 52,
+        "offer_count": 89
+    }
     """
+
     authentication_classes = []  # No auth required
     permission_classes = []      # Public endpoint
 

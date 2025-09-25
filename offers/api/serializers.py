@@ -1,3 +1,10 @@
+"""
+@file serializers.py
+@description
+    Provides serializers for Offer and OfferDetail models, covering creation,
+    listing, retrieval, and update (including nested detail handling).
+"""
+
 from django.db import transaction
 from django.db.models import Min
 from rest_framework import serializers
@@ -5,8 +12,12 @@ from rest_framework import serializers
 from offers.models import Offer, OfferDetail
 
 
-# ---------- Shared validators ----------
 def _validate_features_list(value):
+    """
+    @helper _validate_features_list
+    @description
+        Validates that features is a list of non-empty strings.
+    """
     if not isinstance(value, list):
         raise serializers.ValidationError("Features must be a list of strings.")
     if not all(isinstance(x, str) and x.strip() for x in value):
@@ -14,8 +25,12 @@ def _validate_features_list(value):
     return value
 
 
-# ---------- Nested Detail (used for POST create) ----------
 class OfferDetailSerializer(serializers.ModelSerializer):
+    """
+    @serializer OfferDetailSerializer
+    @description
+        Nested serializer for creating offer details (used in POST /api/offers/).
+    """
     class Meta:
         model = OfferDetail
         fields = [
@@ -42,8 +57,12 @@ class OfferDetailSerializer(serializers.ModelSerializer):
         return attrs
 
 
-# ---------- Offer create (POST /api/offers/) ----------
 class OfferSerializer(serializers.ModelSerializer):
+    """
+    @serializer OfferSerializer
+    @description
+        Serializer for creating an offer with exactly 3 details.
+    """
     details = OfferDetailSerializer(many=True)
 
     class Meta:
@@ -52,7 +71,6 @@ class OfferSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
     def validate_details(self, value):
-        # Spec: exactly 3 details
         if not isinstance(value, list) or len(value) != 3:
             raise serializers.ValidationError("This offer must contain exactly 3 details.")
         allowed = {c[0] for c in OfferDetail.OFFER_TYPE_CHOICES}
@@ -80,8 +98,12 @@ class OfferSerializer(serializers.ModelSerializer):
         return offer
 
 
-# ---------- Lightweight link representation for details in list/retrieve ----------
 class OfferDetailLinkSerializer(serializers.ModelSerializer):
+    """
+    @serializer OfferDetailLinkSerializer
+    @description
+        Lightweight representation of an OfferDetail with a link (used in lists).
+    """
     url = serializers.SerializerMethodField()
 
     class Meta:
@@ -94,8 +116,12 @@ class OfferDetailLinkSerializer(serializers.ModelSerializer):
         return request.build_absolute_uri(path) if request else path
 
 
-# ---------- Offer list (GET /api/offers/) ----------
 class OfferListSerializer(serializers.ModelSerializer):
+    """
+    @serializer OfferListSerializer
+    @description
+        Serializer for listing offers with aggregated fields.
+    """
     details = OfferDetailLinkSerializer(many=True, read_only=True)
     min_price = serializers.SerializerMethodField()
     min_delivery_time = serializers.SerializerMethodField()
@@ -133,8 +159,12 @@ class OfferListSerializer(serializers.ModelSerializer):
         }
 
 
-# ---------- Offer retrieve (GET /api/offers/{id}/) ----------
 class OfferRetrieveSerializer(serializers.ModelSerializer):
+    """
+    @serializer OfferRetrieveSerializer
+    @description
+        Serializer for retrieving a single offer with aggregated values.
+    """
     user = serializers.PrimaryKeyRelatedField(source="owner", read_only=True)
     details = OfferDetailLinkSerializer(many=True, read_only=True)
     min_price = serializers.SerializerMethodField()
@@ -162,8 +192,12 @@ class OfferRetrieveSerializer(serializers.ModelSerializer):
         return obj.details.aggregate(min_val=Min("delivery_time_in_days"))["min_val"]
 
 
-# ---------- Offer detail retrieve (GET /api/offerdetails/{id}/) ----------
 class OfferDetailRetrieveSerializer(serializers.ModelSerializer):
+    """
+    @serializer OfferDetailRetrieveSerializer
+    @description
+        Full serializer for retrieving an OfferDetail.
+    """
     class Meta:
         model = OfferDetail
         fields = [
@@ -177,11 +211,12 @@ class OfferDetailRetrieveSerializer(serializers.ModelSerializer):
         ]
 
 
-# ---------- PATCH support ----------
 class OfferDetailPatchItemSerializer(serializers.Serializer):
     """
-    One item inside the PATCH 'details' list.
-    Identified by 'offer_type' (required). Other fields are optional.
+    @serializer OfferDetailPatchItemSerializer
+    @description
+        Serializer for one item in PATCH 'details' list.
+        Identified by `offer_type`; other fields optional.
     """
     offer_type = serializers.ChoiceField(choices=[c[0] for c in OfferDetail.OFFER_TYPE_CHOICES])
     title = serializers.CharField(required=False, allow_blank=False, max_length=255)
@@ -198,7 +233,11 @@ class OfferDetailPatchItemSerializer(serializers.Serializer):
 
 
 class OfferDetailFullSerializer(serializers.ModelSerializer):
-    """Full detail representation for PATCH response."""
+    """
+    @serializer OfferDetailFullSerializer
+    @description
+        Full serializer for OfferDetail, used in PATCH responses.
+    """
     class Meta:
         model = OfferDetail
         fields = [
@@ -214,10 +253,10 @@ class OfferDetailFullSerializer(serializers.ModelSerializer):
 
 class OfferUpdateSerializer(serializers.ModelSerializer):
     """
-    For PATCH /api/offers/{id}/
-    - Partially updates top-level fields (title, image, description).
-    - Optionally updates any subset of details, matched by 'offer_type'.
-    - Does not allow changing offer_type or detail IDs.
+    @serializer OfferUpdateSerializer
+    @description
+        Serializer for PATCH /api/offers/{id}/.
+        Supports partial updates of offer fields and nested details.
     """
     details = OfferDetailPatchItemSerializer(many=True, required=False)
 
@@ -228,16 +267,13 @@ class OfferUpdateSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        # Update top-level fields if provided
         for field in ["title", "image", "description"]:
             if field in validated_data:
                 setattr(instance, field, validated_data[field])
         instance.save()
 
-        # Handle detail patches
         details_data = validated_data.get("details", None)
         if details_data is not None:
-            # Map existing details by offer_type
             existing = {d.offer_type: d for d in instance.details.all()}
 
             for item in details_data:
@@ -247,7 +283,6 @@ class OfferUpdateSerializer(serializers.ModelSerializer):
                         {"details": f"No existing detail with offer_type='{t}'."}
                     )
                 detail = existing[t]
-                # Update only provided fields (except offer_type/id)
                 for field in ["title", "revisions", "delivery_time_in_days", "price", "features"]:
                     if field in item:
                         setattr(detail, field, item[field])
@@ -256,16 +291,13 @@ class OfferUpdateSerializer(serializers.ModelSerializer):
                     if f in item
                 ])
 
-        # Return full offer representation with full details (per spec)
         return instance
 
     def to_representation(self, instance):
-        # Build response: full offer with full details array
-        data = {
+        return {
             "id": instance.id,
             "title": instance.title,
             "image": instance.image.url if instance.image else None,
             "description": instance.description,
             "details": OfferDetailFullSerializer(instance.details.all(), many=True).data,
         }
-        return data

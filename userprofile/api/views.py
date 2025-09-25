@@ -1,3 +1,9 @@
+"""
+@file views.py
+@description
+    API endpoints for retrieving, updating, and listing user profiles.
+"""
+
 from rest_framework import generics, permissions, parsers
 from userprofile.models import Profile
 from .serializers import (
@@ -10,14 +16,17 @@ from core.permissions import IsProfileOwnerOrReadOnly
 
 class ProfileRetrieveUpdateView(generics.RetrieveUpdateAPIView):
     """
-    GET /api/profile/{pk}/
-      - Auth required
-      - Returns full profile info (with empty strings for specified nullables)
-
-    PATCH /api/profile/{pk}/
-      - Auth required
-      - ONLY the owner can update their own profile
-      - Editable: first_name, last_name, file, location, tel, description, working_hours, email
+    @endpoint ProfileRetrieveUpdateView
+    @route GET /api/profile/{id}/
+    @route PATCH /api/profile/{id}/
+    @auth
+        GET   - Authenticated users
+        PATCH - Only the profile owner
+    @description
+        - GET: Returns the full profile (ensures nullable text fields return empty strings).
+        - PATCH: Allows profile owners to update editable fields.
+    @editable_fields
+        first_name, last_name, file, location, tel, description, working_hours, email
     """
     queryset = Profile.objects.select_related("user").all()
     serializer_class = ProfileSerializer
@@ -28,10 +37,12 @@ class ProfileRetrieveUpdateView(generics.RetrieveUpdateAPIView):
 
 class BusinessProfileListView(generics.ListAPIView):
     """
-    GET /api/profiles/business/
-      - Auth required
-      - Returns a list of all 'business' profiles
-      - Ensures specified text fields are never null in the response
+    @endpoint BusinessProfileListView
+    @route GET /api/profiles/business/
+    @auth Authenticated users
+    @description
+        Returns a list of all profiles with type "business".
+        Ensures nullable text fields are represented as empty strings in the response.
     """
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = BusinessProfileListSerializer
@@ -42,10 +53,12 @@ class BusinessProfileListView(generics.ListAPIView):
 
 class CustomerProfileListView(generics.ListAPIView):
     """
-    GET /api/profiles/customer/
-      - Auth required
-      - Returns a list of all 'customer' profiles
-      - Ensures specified text fields are never null in the response
+    @endpoint CustomerProfileListView
+    @route GET /api/profiles/customer/
+    @auth Authenticated users
+    @description
+        Returns a list of all profiles with type "customer".
+        Ensures nullable text fields are represented as empty strings in the response.
     """
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = CustomerProfileListSerializer

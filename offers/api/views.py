@@ -1,3 +1,10 @@
+"""
+@file views.py
+@description
+    Provides endpoints for creating, listing, retrieving, updating, and deleting offers.
+    Includes filtering, search, ordering, and pagination.
+"""
+
 from django.db.models import Min
 from rest_framework import generics, filters, parsers, permissions
 from rest_framework.pagination import PageNumberPagination
@@ -15,7 +22,14 @@ from core.permissions import IsBusinessUser, IsOfferOwner
 
 class OfferPagination(PageNumberPagination):
     """
-    PageNumberPagination with ?page_size= support.
+    @pagination OfferPagination
+    @extends PageNumberPagination
+    @description
+        Paginator for offers with support for `?page_size` query parameter.
+    @config
+        page_size {int} = 10
+        page_size_query_param = "page_size"
+        max_page_size {int} = 100
     """
     page_size = 10
     page_size_query_param = "page_size"
@@ -24,8 +38,25 @@ class OfferPagination(PageNumberPagination):
 
 class OfferListCreateView(generics.ListCreateAPIView):
     """
-    GET /api/offers/   -> public list with filtering/search/ordering/pagination
-    POST /api/offers/  -> authenticated business users create an offer (exactly 3 details)
+    @endpoint OfferListCreateView
+    @route GET /api/offers/
+    @route POST /api/offers/
+    @auth
+        GET  - Public
+        POST - Authenticated business users only
+    @description
+        - GET: Returns a paginated list of offers with filtering, search, and ordering.
+        - POST: Creates a new offer. Business users must provide exactly 3 details.
+
+    @query_params
+        creator_id {int} - Filter offers by creator ID
+        min_price {decimal} - Filter offers with minimum price
+        max_delivery_time {int} - Filter offers by maximum delivery time in days
+
+    @filtering
+        - Search fields: title, description
+        - Ordering fields: updated_at, min_price
+        - Default ordering: -updated_at
     """
     queryset = (
         Offer.objects.all()
@@ -34,8 +65,6 @@ class OfferListCreateView(generics.ListCreateAPIView):
     )
     parser_classes = [parsers.JSONParser, parsers.MultiPartParser, parsers.FormParser]
     pagination_class = OfferPagination
-
-    # DRF search + ordering
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["title", "description"]
     ordering_fields = ["updated_at", "min_price"]
@@ -43,14 +72,9 @@ class OfferListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method.upper() == "POST":
-            # Before: return [permissions.IsAuthenticated(), IsBusinessUser()]
-            return [permissions.IsAuthenticated()]
+            return [permissions.IsAuthenticated(), IsBusinessUser()]
         return [permissions.AllowAny()]
-
-    #def get_permissions(self):
-     #   if self.request.method.upper() == "POST":
-      #      return [permissions.IsAuthenticated(), IsBusinessUser()]
-       # return [permissions.AllowAny()]
+    
 
     def get_serializer_class(self):
         if self.request.method.upper() == "POST":
@@ -72,16 +96,23 @@ class OfferListCreateView(generics.ListCreateAPIView):
         if max_delivery_time:
             qs = qs.filter(details__delivery_time_in_days__lte=max_delivery_time)
 
-        # Annotate for ordering by min_price
-        qs = qs.annotate(min_price=Min("details__price"))
-        return qs
+        return qs.annotate(min_price=Min("details__price"))
 
 
 class OfferRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET /api/offers/<id>/     -> Auth required, returns detail links + min aggregates
-    PATCH /api/offers/<id>/   -> Only owner may modify; partial update incl. details-by-offer_type
-    DELETE /api/offers/<id>/  -> Only owner may delete; returns 204 No Content
+    @endpoint OfferRetrieveUpdateDestroyView
+    @route GET /api/offers/<id>/
+    @route PATCH /api/offers/<id>/
+    @route DELETE /api/offers/<id>/
+    @auth
+        GET    - Authenticated users
+        PATCH  - Owner only
+        DELETE - Owner only
+    @description
+        - GET: Returns offer details with related objects and aggregates.
+        - PATCH: Allows owners to update offers, including details by offer_type.
+        - DELETE: Allows owners to delete offers (returns 204 No Content).
     """
     queryset = (
         Offer.objects.all()
@@ -94,7 +125,6 @@ class OfferRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     def get_permissions(self):
         if self.request.method.upper() in ("PATCH", "PUT", "DELETE"):
             return [IsOfferOwner()]
-        # GET requires authentication
         return [permissions.IsAuthenticated()]
 
     def get_serializer_class(self):
@@ -105,8 +135,11 @@ class OfferRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
 
 class OfferDetailRetrieveView(generics.RetrieveAPIView):
     """
-    GET /api/offerdetails/<id>/
-    Auth required. Returns full offer detail object.
+    @endpoint OfferDetailRetrieveView
+    @route GET /api/offerdetails/<id>/
+    @auth Authenticated users only
+    @description
+        Returns the full offer detail object.
     """
     queryset = OfferDetail.objects.all()
     serializer_class = OfferDetailRetrieveSerializer

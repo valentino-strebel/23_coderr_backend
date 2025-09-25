@@ -1,10 +1,21 @@
+"""
+@file permissions.py
+@description
+    Custom permission classes for reviews: restrict creation to customers
+    and enforce object-level ownership for modifications.
+"""
+
 from rest_framework.permissions import BasePermission
 
 
 class IsCustomerUser(BasePermission):
     """
-    Only authenticated users who are 'customer' type may create reviews.
-    Adjust attribute names to your actual User/Profile model.
+    @permission IsCustomerUser
+    @description
+        Grants access only to authenticated users with type "customer".
+        Checks both `User.user_type` and `User.profile.type`.
+    @usage
+        Used to restrict review creation (POST /api/reviews/).
     """
     message = "Only authenticated users with a customer profile can perform this action."
 
@@ -13,25 +24,26 @@ class IsCustomerUser(BasePermission):
         if not user or not user.is_authenticated:
             return False
 
-        # Option A: field on User
         if getattr(user, "user_type", None) == "customer":
             return True
 
-        # Option B: field on related Profile
         profile = getattr(user, "profile", None)
         return getattr(profile, "type", None) == "customer"
 
 
 class IsReviewOwner(BasePermission):
     """
-    Only the creator (reviewer) of the review can modify it.
+    @permission IsReviewOwner
+    @description
+        Grants object-level access only to the reviewer who created the review.
+        Used for update and delete operations.
+    @usage
+        Ensures only the original author can modify or delete their review.
     """
     message = "You are not allowed to edit this review."
 
     def has_permission(self, request, view):
-        # Must be authenticated to attempt the operation
         return bool(request.user and request.user.is_authenticated)
 
     def has_object_permission(self, request, view, obj):
-        # Allow only the reviewer to modify
         return getattr(obj, "reviewer_id", None) == getattr(request.user, "id", None)

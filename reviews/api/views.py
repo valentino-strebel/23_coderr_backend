@@ -1,3 +1,9 @@
+"""
+@file views.py
+@description
+    Provides endpoints for creating, listing, updating, and deleting reviews.
+"""
+
 from rest_framework import generics, parsers, permissions, filters
 
 from reviews.models import Review
@@ -7,23 +13,22 @@ from core.permissions import IsCustomerUser, IsReviewOwner
 
 class ReviewListCreateView(generics.ListCreateAPIView):
     """
-    GET /api/reviews/
-      - Auth required
-      - Optional filters:
-          ?business_user_id=<int>
-          ?reviewer_id=<int>
-      - Ordering:
-          ?ordering=updated_at | -updated_at | rating | -rating
-      - Returns a (possibly paginated) list of reviews.
-
-    POST /api/reviews/
-      - Auth required AND requester must be a 'customer'
-      - Body: { business_user, rating, description? }
-      - Returns the created review (201)
+    @endpoint ReviewListCreateView
+    @route GET /api/reviews/
+    @route POST /api/reviews/
+    @auth
+        GET  - Authenticated users
+        POST - Authenticated users of type "customer"
+    @description
+        - GET: Returns a list of reviews, optionally filtered and ordered.
+        - POST: Creates a new review for a business user.
+    @query_params
+        business_user_id {int} - Filter reviews by business user
+        reviewer_id {int} - Filter reviews by reviewer
+        ordering {string} - Order by "updated_at", "-updated_at", "rating", "-rating"
     """
     queryset = Review.objects.all()
     parser_classes = [parsers.JSONParser]
-
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["updated_at", "rating"]
     ordering = ["-updated_at"]
@@ -52,20 +57,17 @@ class ReviewListCreateView(generics.ListCreateAPIView):
 
 class ReviewUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     """
-    PATCH /api/reviews/<id>/
-      - Auth required
-      - Only the review author (reviewer) may update
-      - Only 'rating' and 'description' are editable
-      - Returns full review on success
-
-    DELETE /api/reviews/<id>/
-      - Auth required
-      - Only the review author (reviewer) may delete
-      - Returns 204 No Content on success
+    @endpoint ReviewUpdateDestroyView
+    @route PATCH /api/reviews/<id>/
+    @route DELETE /api/reviews/<id>/
+    @auth Authenticated users; only review owners may update or delete
+    @description
+        - PATCH: Allows a review author to update "rating" and "description".
+        - DELETE: Allows a review author to delete the review.
     """
     queryset = Review.objects.all()
     serializer_class = ReviewUpdateSerializer
     permission_classes = [permissions.IsAuthenticated, IsReviewOwner]
     parser_classes = [parsers.JSONParser]
     lookup_field = "pk"
-    http_method_names = ["patch", "delete"]  # restrict to PATCH and DELETE
+    http_method_names = ["patch", "delete"]

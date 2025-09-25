@@ -1,3 +1,9 @@
+"""
+@file serializers.py
+@description
+    Serializers for creating, listing, and updating reviews.
+"""
+
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from rest_framework import serializers
@@ -7,7 +13,18 @@ from reviews.models import Review
 
 class ReviewSerializer(serializers.ModelSerializer):
     """
-    Output serializer for a review (used for list, create result, and patch result).
+    @serializer ReviewSerializer
+    @description
+        Output serializer for reviews, used for list responses,
+        create results, and patch results.
+    @fields
+        id {int}
+        business_user {FK<User>}
+        reviewer {FK<User>}
+        rating {int} 1..5
+        description {string}
+        created_at {datetime}
+        updated_at {datetime}
     """
     class Meta:
         model = Review
@@ -25,7 +42,19 @@ class ReviewSerializer(serializers.ModelSerializer):
 
 class ReviewCreateSerializer(serializers.Serializer):
     """
-    Input serializer for POST /api/reviews/
+    @serializer ReviewCreateSerializer
+    @description
+        Input serializer for POST /api/reviews/.
+        Validates target business user, prevents self-reviews,
+        and enforces a single review per (reviewer, business_user).
+    @fields
+        business_user {int} - ID of the business user being reviewed
+        rating {int} - Required, 1..5
+        description {string} - Optional
+    @errors
+        - 400 if target user not found or not a business
+        - 400 if reviewer attempts to review themselves
+        - 400 if a review already exists for this pair
     """
     business_user = serializers.IntegerField(required=True, min_value=1)
     rating = serializers.IntegerField(required=True, min_value=1, max_value=5)
@@ -38,7 +67,6 @@ class ReviewCreateSerializer(serializers.Serializer):
         except User.DoesNotExist:
             raise serializers.ValidationError("Target business user not found.")
 
-        # Verify business profile
         is_business = False
         if getattr(target, "user_type", None) == "business":
             is_business = True
@@ -56,11 +84,9 @@ class ReviewCreateSerializer(serializers.Serializer):
         reviewer = getattr(request, "user", None)
         business_user_id = attrs.get("business_user")
 
-        # Prevent reviewing oneself
         if reviewer and reviewer.id == business_user_id:
             raise serializers.ValidationError("You cannot review yourself.")
 
-        # Enforce one review per (reviewer, business_user)
         if reviewer and business_user_id:
             exists = Review.objects.filter(
                 reviewer_id=reviewer.id,
@@ -85,7 +111,6 @@ class ReviewCreateSerializer(serializers.Serializer):
                 description=validated_data.get("description", ""),
             )
         except IntegrityError:
-            # Safety net for race conditions on the unique constraint
             raise serializers.ValidationError(
                 "You have already submitted a review for this business user."
             )
@@ -97,9 +122,14 @@ class ReviewCreateSerializer(serializers.Serializer):
 
 class ReviewUpdateSerializer(serializers.ModelSerializer):
     """
-    PATCH /api/reviews/{id}/
-    - Only 'rating' and 'description' are editable.
-    - Returns the FULL review after update.
+    @serializer ReviewUpdateSerializer
+    @description
+        Input serializer for PATCH /api/reviews/{id}/.
+        Only 'rating' and 'description' may be updated.
+        Returns the full review representation on success.
+    @fields
+        rating {int} - Optional, 1..5
+        description {string} - Optional
     """
     class Meta:
         model = Review
@@ -110,18 +140,15 @@ class ReviewUpdateSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, attrs):
-        # Reject unexpected fields in the payload
         allowed = {"rating", "description"}
         extra = set(self.initial_data.keys()) - allowed
         if extra:
             raise serializers.ValidationError(
                 {"non_field_errors": f"Only 'rating' and 'description' may be updated. Unexpected: {', '.join(sorted(extra))}."}
             )
-        # Ensure at least one allowed field provided
         if not attrs:
             raise serializers.ValidationError("Provide at least one of: 'rating', 'description'.")
         return attrs
 
     def to_representation(self, instance):
-        # Return the full review shape
         return ReviewSerializer(instance, context=self.context).data

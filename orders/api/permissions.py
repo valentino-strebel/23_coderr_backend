@@ -1,10 +1,19 @@
+"""
+@file permissions.py
+@description
+    Custom DRF permission classes for customer and business user access control,
+    as well as order-specific object-level checks.
+"""
+
 from rest_framework.permissions import BasePermission
 
 
 class IsCustomerUser(BasePermission):
     """
-    Allows access only to authenticated users who are 'customer' type.
-    Adjust attribute names to match your User/Profile model.
+    @permission IsCustomerUser
+    @description
+        Grants access only to authenticated users of type "customer".
+        Checks both `User.user_type` and `User.profile.type`.
     """
     message = "Authenticated user is not a 'customer' profile."
 
@@ -13,18 +22,19 @@ class IsCustomerUser(BasePermission):
         if not user or not user.is_authenticated:
             return False
 
-        # Option A: field on User
         if getattr(user, "user_type", None) == "customer":
             return True
 
-        # Option B: field on related Profile
         profile = getattr(user, "profile", None)
         return getattr(profile, "type", None) == "customer"
 
 
 class IsBusinessUser(BasePermission):
     """
-    Allows access only to authenticated users who are 'business' type.
+    @permission IsBusinessUser
+    @description
+        Grants access only to authenticated users of type "business".
+        Checks both `User.user_type` and `User.profile.type`.
     """
     message = "Authenticated user is not a 'business' profile."
 
@@ -42,17 +52,16 @@ class IsBusinessUser(BasePermission):
 
 class IsOrderBusinessUser(BasePermission):
     """
-    Object-level permission: the requester must be the business user on the order.
-    Also requires the requester to be a 'business' user.
+    @permission IsOrderBusinessUser
+    @description
+        Object-level permission ensuring that:
+        - The requester is a business user, and
+        - The requester is the business party attached to the order.
     """
     message = "You are not allowed to update this order."
 
     def has_permission(self, request, view):
-        # Auth + business check at request-level
-        if not IsBusinessUser().has_permission(request, view):
-            return False
-        return True
+        return IsBusinessUser().has_permission(request, view)
 
     def has_object_permission(self, request, view, obj):
-        # Only the business party attached to the order can mutate it
         return obj.business_user_id == request.user.id

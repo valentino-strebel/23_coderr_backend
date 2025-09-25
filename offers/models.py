@@ -1,9 +1,27 @@
+"""
+@file models.py
+@description
+    Defines the Offer and OfferDetail models for the offers app.
+"""
+
 from django.conf import settings
 from django.db import models
 
 
 class Offer(models.Model):
-    """Top-level offer, owned by a business user."""
+    """
+    @model Offer
+    @description
+        Represents a top-level offer created by a business user.
+
+    @fields
+        owner {FK<User>} - The business user who owns this offer
+        title {string} - Offer title, max length 255
+        image {ImageField} - Optional image for the offer
+        description {string} - Optional textual description
+        created_at {datetime} - Timestamp when the offer was created
+        updated_at {datetime} - Timestamp when the offer was last updated
+    """
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -21,7 +39,25 @@ class Offer(models.Model):
 
 
 class OfferDetail(models.Model):
-    """A tier/plan within an offer (e.g., basic/standard/premium)."""
+    """
+    @model OfferDetail
+    @description
+        Represents a specific tier/plan within an offer (e.g., basic, standard, premium).
+
+    @fields
+        offer {FK<Offer>} - The parent offer
+        title {string} - Title of the offer detail
+        revisions {int} - Number of revisions included (must be positive)
+        delivery_time_in_days {int} - Delivery time in days (must be positive)
+        price {decimal} - Price of the offer detail
+        features {JSON} - List of feature strings
+        offer_type {string} - Type of offer detail, one of "basic", "standard", "premium"
+
+    @choices
+        BASIC = "basic"
+        STANDARD = "standard"
+        PREMIUM = "premium"
+    """
     BASIC = "basic"
     STANDARD = "standard"
     PREMIUM = "premium"

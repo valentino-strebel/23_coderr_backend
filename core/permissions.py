@@ -1,4 +1,29 @@
-# permissions.py
+"""
+@file permissions.py
+@description
+    Defines custom DRF permissions for role-based access control, ownership checks,
+    and generic authentication requirements.
+
+@permissions
+    - RolePermission (base for role checks)
+    - IsBusinessUser
+    - IsCustomerUser
+    - IsAuthenticatedOnly
+    - IsOwner
+    - IsOwnerOrReadOnly
+    - IsOfferOwner
+    - IsReviewOwner
+    - IsProfileOwnerOrReadOnly
+    - IsOrderBusinessUser
+
+@helpers
+    - _safe_get: Safe getattr with default
+    - _normalize: Stringify + normalize values
+    - _is_any_role: Flexible role matcher
+    - _user_is_authenticated: Check user authentication
+    - _user_matches_role: Match user against role definitions
+"""
+
 from __future__ import annotations
 
 import logging
@@ -9,12 +34,12 @@ from rest_framework.permissions import BasePermission, SAFE_METHODS
 logger = logging.getLogger(__name__)
 
 
-# -------------------------
-# Helpers
-# -------------------------
-
 def _safe_get(obj: Any, attr: str, default: Any = None) -> Any:
-    """Safely getattr with default."""
+    """
+    @helper _safe_get
+    @description
+        Safely retrieve an attribute from an object with a fallback default.
+    """
     try:
         return getattr(obj, attr, default)
     except Exception:  # pragma: no cover
@@ -22,7 +47,11 @@ def _safe_get(obj: Any, attr: str, default: Any = None) -> Any:
 
 
 def _normalize(val: Any) -> Optional[str]:
-    """Stringify + normalize for loose equality."""
+    """
+    @helper _normalize
+    @description
+        Stringify and normalize a value for loose equality checks.
+    """
     if val is None:
         return None
     try:
@@ -38,37 +67,40 @@ def _is_any_role(
     probe_attrs: Iterable[str] = ("name", "label", "value", "code", "slug", "key", "type"),
 ) -> bool:
     """
-    Return True if 'candidate' represents any of the accepted roles.
+    @helper _is_any_role
+    @description
+        Determine if a candidate represents any of the accepted roles.
 
-    Handles:
-    - raw strings: "business", "customer", etc.
-    - ints/enums stored as ints
-    - enum-like objects (checks common attributes)
-    - last-resort stringification
+    @handles
+        - Raw strings ("business", "customer")
+        - Ints/enums stored as ints
+        - Enum-like objects with common attributes
+        - Fallback to stringification
     """
     if candidate is None:
         return False
 
-    # Strings
     if isinstance(candidate, str):
         return _normalize(candidate) in {s.lower() for s in accepted_strings}
 
-    # Ints / enum-as-int
     if isinstance(candidate, int):
         return candidate in set(accepted_numbers)
 
-    # Enum-like / object w/ informative attrs
     for attr in probe_attrs:
         if hasattr(candidate, attr):
             if _is_any_role(getattr(candidate, attr), accepted_strings, accepted_numbers, probe_attrs):
                 return True
 
-    # Last resort: stringify
     n = _normalize(candidate)
     return n in {s.lower() for s in accepted_strings} if n is not None else False
 
 
 def _user_is_authenticated(request) -> bool:
+    """
+    @helper _user_is_authenticated
+    @description
+        Check if the request has an authenticated user.
+    """
     user = getattr(request, "user", None)
     return bool(user and getattr(user, "is_authenticated", False))
 
@@ -77,32 +109,29 @@ def _user_matches_role(
     user: Any,
     role_strings: Iterable[str],
     role_numbers: Iterable[int] = (),
-    user_role_attr: str = "type",          # <-- was "user_type"
+    user_role_attr: str = "type",
     profile_attr: str = "profile",
     profile_role_attr: str = "type",
 ) -> bool:
     """
-    Check role on user.<user_role_attr> first, then on user.<profile>.<profile_role_attr>.
+    @helper _user_matches_role
+    @description
+        Check a user's role, first directly on the user object,
+        then on an associated profile object.
     """
-    # Direct field on user
     if _is_any_role(_safe_get(user, user_role_attr), role_strings, role_numbers):
         return True
 
-    # Fallback: profile.<profile_role_attr>
     profile = _safe_get(user, profile_attr)
     return _is_any_role(_safe_get(profile, profile_role_attr), role_strings, role_numbers)
 
 
-# -------------------------
-# Role-based permissions
-# -------------------------
-
 class RolePermission(BasePermission):
     """
-    Generic role gate. Subclass and set:
-      ROLE_STRINGS = {"business"} (or {"customer"} ...)
-      ROLE_NUMBERS = {2}            # optional
-      message = "..."
+    @permission RolePermission
+    @description
+        Base permission class for role-based checks.
+        Subclass and define ROLE_STRINGS and optionally ROLE_NUMBERS.
     """
     ROLE_STRINGS: Iterable[str] = ()
     ROLE_NUMBERS: Iterable[int] = ()
@@ -126,50 +155,52 @@ class RolePermission(BasePermission):
 
 class IsBusinessUser(RolePermission):
     """
-    Allows access only to authenticated users who are 'business' type.
-    Accepts flexible representations (strings, ints, enums).
+    @permission IsBusinessUser
+    @description
+        Allows access only to authenticated users with type "business".
+        Supports flexible role representations (strings, ints, enums).
     """
     message = "Authenticated user is not a 'business' profile."
     ROLE_STRINGS = {"business", "biz"}
-    ROLE_NUMBERS = {2}  # adjust to your enum/int mapping as needed
+    ROLE_NUMBERS = {2}
 
 
 class IsCustomerUser(RolePermission):
     """
-    Allows access only to authenticated users who are 'customer' type.
+    @permission IsCustomerUser
+    @description
+        Allows access only to authenticated users with type "customer".
     """
     message = "Authenticated user is not a 'customer' profile."
     ROLE_STRINGS = {"customer"}
-    ROLE_NUMBERS = set()  # adjust if you also use ints for this role
+    ROLE_NUMBERS = set()
 
-
-# -------------------------
-# Generic ownership permissions
-# -------------------------
 
 class IsAuthenticatedOnly(BasePermission):
-    """Require an authenticated user for view access."""
+    """
+    @permission IsAuthenticatedOnly
+    @description
+        Requires that the request is made by an authenticated user.
+    """
     def has_permission(self, request, view):
         return _user_is_authenticated(request)
 
 
 class IsOwner(BasePermission):
     """
-    Generic object-level owner check. Configure via subclass OR set class attrs:
+    @permission IsOwner
+    @description
+        Grants permission only if the requesting user is the owner of the object.
 
-      OWNER_ID_FIELD = "owner_id"   # attribute on the object to compare
-      USER_ID_FIELD  = "id"         # attribute on request.user to compare
-
-    Example subclasses:
-      - class IsOfferOwner(IsOwner): OWNER_ID_FIELD = "owner_id"
-      - class IsReviewOwner(IsOwner): OWNER_ID_FIELD = "reviewer_id"
+    @config
+        OWNER_ID_FIELD = "owner_id"
+        USER_ID_FIELD  = "id"
     """
     message = "You do not have permission to modify this resource."
     OWNER_ID_FIELD = "owner_id"
     USER_ID_FIELD = "id"
 
     def has_permission(self, request, view):
-        # Typically require auth to even try object ops
         return _user_is_authenticated(request)
 
     def has_object_permission(self, request, view, obj):
@@ -178,7 +209,10 @@ class IsOwner(BasePermission):
 
 class IsOwnerOrReadOnly(IsOwner):
     """
-    Read allowed (SAFE_METHODS) for authenticated users; write only if owner.
+    @permission IsOwnerOrReadOnly
+    @description
+        Allows read access to authenticated users,
+        but write access only if the user is the object owner.
     """
     def has_object_permission(self, request, view, obj):
         if request.method in SAFE_METHODS:
@@ -186,29 +220,42 @@ class IsOwnerOrReadOnly(IsOwner):
         return super().has_object_permission(request, view, obj)
 
 
-# -------------------------
-# Concrete reuse of generics
-# -------------------------
-
 class IsOfferOwner(IsOwnerOrReadOnly):
+    """
+    @permission IsOfferOwner
+    @description
+        Grants write permissions only to the owner of an offer.
+    """
     message = "You do not have permission to modify this offer."
     OWNER_ID_FIELD = "owner_id"
 
 
 class IsReviewOwner(IsOwner):
+    """
+    @permission IsReviewOwner
+    @description
+        Grants permission only to the owner of a review.
+    """
     message = "You are not allowed to edit this review."
     OWNER_ID_FIELD = "reviewer_id"
 
 
 class IsProfileOwnerOrReadOnly(IsOwnerOrReadOnly):
+    """
+    @permission IsProfileOwnerOrReadOnly
+    @description
+        Allows read access to profiles, but write access only to the profile owner.
+    """
     message = "You do not have permission to modify this profile."
     OWNER_ID_FIELD = "user_id"
 
 
 class IsOrderBusinessUser(BasePermission):
     """
-    Request-level: must be a business user.
-    Object-level: must be the business party attached to the order.
+    @permission IsOrderBusinessUser
+    @description
+        Request-level: user must be a business.
+        Object-level: user must be the business party attached to the order.
     """
     message = "You are not allowed to update this order."
     ORDER_BUSINESS_FIELD = "business_user_id"

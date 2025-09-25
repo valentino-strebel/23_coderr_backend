@@ -1,3 +1,9 @@
+"""
+@file views.py
+@description
+    Provides endpoints for creating, listing, updating, deleting, and counting orders.
+"""
+
 from django.contrib.auth import get_user_model
 from rest_framework import generics, parsers, permissions, status
 from rest_framework.response import Response
@@ -14,19 +20,20 @@ from core.permissions import IsCustomerUser, IsOrderBusinessUser
 
 class OrderListCreateView(generics.ListCreateAPIView):
     """
-    GET /api/orders/
-      - Auth required
-      - Returns ONLY orders where the current user is either the customer or the business
-
-    POST /api/orders/
-      - Auth required AND user must be of type 'customer'
-      - Creates a new order from an offer_detail_id (see OrderCreateSerializer)
+    @endpoint OrderListCreateView
+    @route GET /api/orders/
+    @route POST /api/orders/
+    @auth
+        GET  - Authenticated users
+        POST - Authenticated users of type 'customer'
+    @description
+        - GET: Returns only orders where the current user is either the customer or the business.
+        - POST: Creates a new order from an offer_detail_id.
     """
     queryset = Order.objects.all()
     parser_classes = [parsers.JSONParser]
 
     def get_permissions(self):
-        # POST requires customer users; GET just requires authentication
         if self.request.method.upper() == "POST":
             return [permissions.IsAuthenticated(), IsCustomerUser()]
         return [permissions.IsAuthenticated()]
@@ -37,11 +44,6 @@ class OrderListCreateView(generics.ListCreateAPIView):
         return OrderSerializer
 
     def get_queryset(self):
-        """
-        Limit results to orders where the user is involved:
-          - as customer_user OR
-          - as business_user
-        """
         user = self.request.user
         if not user or not user.is_authenticated:
             return Order.objects.none()
@@ -50,33 +52,38 @@ class OrderListCreateView(generics.ListCreateAPIView):
 
 class OrderUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     """
-    PATCH /api/orders/<id>/
-      -> Only the business party on the order may update the status
-    DELETE /api/orders/<id>/
-      -> Only staff (is_staff) may delete; returns 204 No Content
+    @endpoint OrderUpdateDestroyView
+    @route PATCH /api/orders/<id>/
+    @route DELETE /api/orders/<id>/
+    @auth
+        PATCH  - Business party on the order
+        DELETE - Admin users (is_staff)
+    @description
+        - PATCH: Allows the business party to update order status.
+        - DELETE: Allows staff to delete an order (returns 204 No Content).
     """
     queryset = Order.objects.all()
     serializer_class = OrderStatusUpdateSerializer
     parser_classes = [parsers.JSONParser]
     lookup_field = "pk"
-    http_method_names = ["patch", "delete"]  # restrict to PATCH and DELETE
+    http_method_names = ["patch", "delete"]
 
     def get_permissions(self):
         method = self.request.method.upper()
         if method == "PATCH":
-            # Business user on this order can update status
             return [IsOrderBusinessUser()]
         if method == "DELETE":
-            # Staff-only delete
             return [permissions.IsAdminUser()]
         return [permissions.IsAuthenticated()]
 
 
 class _BusinessUserValidatorMixin:
     """
-    Mixin to validate that a given business_user_id exists and is a 'business' user.
+    @mixin _BusinessUserValidatorMixin
+    @description
+        Provides utility to validate that a given business_user_id corresponds to
+        an existing user of type 'business'. Raises 404 otherwise.
     """
-
     def _get_and_validate_business_user(self, business_user_id: int):
         User = get_user_model()
         try:
@@ -84,7 +91,6 @@ class _BusinessUserValidatorMixin:
         except User.DoesNotExist:
             raise NotFound("Business user not found.")
 
-        # Verify this is a business user (adjust attribute names to your model)
         is_business = False
         if getattr(user, "user_type", None) == "business":
             is_business = True
@@ -101,10 +107,14 @@ class _BusinessUserValidatorMixin:
 
 class OrderInProgressCountView(_BusinessUserValidatorMixin, generics.GenericAPIView):
     """
-    GET /api/order-count/<business_user_id>/
-    - Auth required
-    - Returns {'order_count': <int>} for orders with status='in_progress'
-    - 404 if the user does not exist OR is not a 'business' user
+    @endpoint OrderInProgressCountView
+    @route GET /api/order-count/<business_user_id>/
+    @auth Authenticated users
+    @description
+        Returns the count of in-progress orders for a given business user.
+        Raises 404 if the user does not exist or is not a business.
+    @response
+        { "order_count": <int> }
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -119,10 +129,14 @@ class OrderInProgressCountView(_BusinessUserValidatorMixin, generics.GenericAPIV
 
 class OrderCompletedCountView(_BusinessUserValidatorMixin, generics.GenericAPIView):
     """
-    GET /api/completed-order-count/<business_user_id>/
-    - Auth required
-    - Returns {'completed_order_count': <int>} for orders with status='completed'
-    - 404 if the user does not exist OR is not a 'business' user
+    @endpoint OrderCompletedCountView
+    @route GET /api/completed-order-count/<business_user_id>/
+    @auth Authenticated users
+    @description
+        Returns the count of completed orders for a given business user.
+        Raises 404 if the user does not exist or is not a business.
+    @response
+        { "completed_order_count": <int> }
     """
     permission_classes = [permissions.IsAuthenticated]
 

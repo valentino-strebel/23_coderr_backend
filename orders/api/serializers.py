@@ -1,3 +1,9 @@
+"""
+@file serializers.py
+@description
+    Provides serializers for Order creation, listing, and status updates.
+"""
+
 from django.db import transaction
 from rest_framework import serializers
 
@@ -7,7 +13,23 @@ from offers.models import OfferDetail
 
 class OrderSerializer(serializers.ModelSerializer):
     """
-    Output serializer used for list, create result, and patch result.
+    @serializer OrderSerializer
+    @description
+        Output serializer for listing orders, returning order creation results,
+        and returning updated order results.
+    @fields
+        id {int} - Order ID
+        customer_user {FK<User>} - Customer who placed the order
+        business_user {FK<User>} - Business user receiving the order
+        title {string} - Title snapshot from the offer detail
+        revisions {int} - Revisions snapshot from the offer detail
+        delivery_time_in_days {int} - Delivery time snapshot
+        price {decimal} - Price snapshot
+        features {list<string>} - Features snapshot
+        offer_type {string} - Offer type snapshot
+        status {string} - Current status of the order
+        created_at {datetime} - When the order was created
+        updated_at {datetime} - When the order was last updated
     """
     class Meta:
         model = Order
@@ -30,13 +52,19 @@ class OrderSerializer(serializers.ModelSerializer):
 
 class OrderCreateSerializer(serializers.Serializer):
     """
-    Input for POST /api/orders/
+    @serializer OrderCreateSerializer
+    @description
+        Input serializer for creating a new order from an OfferDetail.
+        Validates that the offer exists and prevents users from ordering their own offers.
+    @fields
+        offer_detail_id {int} - Required, ID of the OfferDetail to order
+    @errors
+        - 400 if OfferDetail not found
+        - 400 if customer tries to order their own offer
     """
     offer_detail_id = serializers.IntegerField(required=True, min_value=1)
 
     def validate_offer_detail_id(self, value):
-        # Existence is checked in create() to keep a clean error message;
-        # swap to view-level NotFound if you want strict 404 semantics.
         return value
 
     @transaction.atomic
@@ -45,8 +73,6 @@ class OrderCreateSerializer(serializers.Serializer):
         user = getattr(request, "user", None)
         offer_detail_id = validated_data["offer_detail_id"]
 
-        # 404 if offer detail is missing (serializer ValidationError yields 400 by default;
-        # if you want strict 404, move this to the view and raise NotFound)
         try:
             od = OfferDetail.objects.select_related("offer__owner").get(pk=offer_detail_id)
         except OfferDetail.DoesNotExist:
@@ -57,14 +83,12 @@ class OrderCreateSerializer(serializers.Serializer):
 
         business_user = od.offer.owner
 
-        # 403-like: prevent ordering own offer
         if user.id == business_user.id:
             raise serializers.ValidationError(
                 {"non_field_errors": "You cannot order your own offer."},
                 code="permission_denied",
             )
 
-        # Snapshot fields from OfferDetail
         order = Order.objects.create(
             customer_user=user,
             business_user=business_user,
@@ -85,17 +109,21 @@ class OrderCreateSerializer(serializers.Serializer):
 
 class OrderStatusUpdateSerializer(serializers.ModelSerializer):
     """
-    For PATCH /api/orders/{id}/
-    - Only 'status' is allowed in the payload.
-    - Validates against model choices.
-    - Returns FULL order payload after update.
+    @serializer OrderStatusUpdateSerializer
+    @description
+        Input serializer for updating an order’s status via PATCH.
+        Ensures only the `status` field is accepted.
+        Returns the full order representation on success.
+    @fields
+        status {string} - New status value
+    @errors
+        - 400 if unexpected fields are provided
     """
     class Meta:
         model = Order
         fields = ["status"]
 
     def validate(self, attrs):
-        # Reject any unexpected fields (e.g., title, price, etc.)
         extra_keys = set(self.initial_data.keys()) - {"status"}
         if extra_keys:
             raise serializers.ValidationError(
@@ -104,11 +132,9 @@ class OrderStatusUpdateSerializer(serializers.ModelSerializer):
         return attrs
 
     def update(self, instance, validated_data):
-        # Only status is allowed here
         instance.status = validated_data["status"]
         instance.save(update_fields=["status", "updated_at"])
         return instance
 
     def to_representation(self, instance):
-        # Return the full order object as per success response
         return OrderSerializer(instance, context=self.context).data
