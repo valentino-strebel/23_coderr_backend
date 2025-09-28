@@ -15,7 +15,7 @@ from .serializers import (
     OrderSerializer,
     OrderStatusUpdateSerializer,
 )
-from core.permissions import IsCustomerUser, IsOrderBusinessUser
+from core.permissions import IsCustomerUser, IsBusinessUser
 
 
 class OrderListCreateView(generics.ListCreateAPIView):
@@ -71,10 +71,24 @@ class OrderUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     def get_permissions(self):
         method = self.request.method.upper()
         if method == "PATCH":
-            return [IsOrderBusinessUser()]
+            # 401 if unauthenticated, 403 if authenticated but not a business
+            return [permissions.IsAuthenticated(), IsBusinessUser()]
         if method == "DELETE":
             return [permissions.IsAdminUser()]
         return [permissions.IsAuthenticated()]
+
+    def get_queryset(self):
+        """
+        For PATCH, restrict the queryset to orders where the requester is the business user.
+        This way, a non-existent id or not-your-order yields a natural 404.
+        DELETE remains unrestricted because it's admin-only.
+        """
+        if self.request.method.upper() == "PATCH":
+            user = getattr(self.request, "user", None)
+            if not user or not getattr(user, "is_authenticated", False):
+                return Order.objects.none()
+            return Order.objects.filter(business_user=user)
+        return super().get_queryset()
 
 
 class _BusinessUserValidatorMixin:
