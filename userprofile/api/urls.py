@@ -4,15 +4,14 @@
     Defines URL routes for user profile endpoints.
 
 @routes
-    GET  /api/profile/{id}/        - Retrieve a user profile (auth required)
-    PATCH /api/profile/{id}/       - Update a profile (only owner allowed)
-    GET  /api/profiles/business/   - List all business profiles (auth required)
-    GET  /api/profiles/customer/   - List all customer profiles (auth required)
+    GET   /api/profile/{pk}/        - Retrieve a user profile (auth required)
+    PATCH /api/profile/{pk}/        - Update a profile (only owner allowed)
+    GET   /api/profiles/business/   - List all business profiles (auth required)
+    GET   /api/profiles/customer/   - List all customer profiles (auth required)
 
-@imports
-    ProfileRetrieveUpdateView
-    BusinessProfileListView
-    CustomerProfileListView
+@note
+    The project-level urls.py should include these under the `/api/` prefix, e.g.:
+        path("api/", include("yourapp.urls"))
 """
 
 from django.urls import path
@@ -21,6 +20,8 @@ from .views import (
     BusinessProfileListView,
     CustomerProfileListView,
 )
+
+app_name = "userprofile_api"
 
 urlpatterns = [
     path("profile/<int:pk>/", ProfileRetrieveUpdateView.as_view(), name="profile-detail"),
