@@ -4,14 +4,17 @@
     API endpoints for retrieving, updating, and listing user profiles.
 """
 
+from django.shortcuts import get_object_or_404
 from rest_framework import generics, permissions, parsers
+
 from userprofile.models import Profile
 from .serializers import (
     ProfileSerializer,
     BusinessProfileListSerializer,
     CustomerProfileListSerializer,
 )
-from core.permissions import IsProfileOwnerOrReadOnly
+
+from .permissions import IsProfileOwnerOrReadOnly
 
 
 class ProfileRetrieveUpdateView(generics.RetrieveUpdateAPIView):
@@ -33,6 +36,13 @@ class ProfileRetrieveUpdateView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsProfileOwnerOrReadOnly]
     parser_classes = [parsers.JSONParser, parsers.MultiPartParser, parsers.FormParser]
     lookup_field = "pk"
+
+    # ✅ Important: your API spec says {pk} is the *User* id, not the Profile id.
+    def get_object(self):
+        return get_object_or_404(
+            self.get_queryset(),
+            user_id=self.kwargs["pk"],
+        )
 
 
 class BusinessProfileListView(generics.ListAPIView):
