@@ -16,6 +16,7 @@ from .serializers import (
     OfferRetrieveSerializer,
     OfferDetailRetrieveSerializer,
     OfferUpdateSerializer,
+    OfferListQueryParamsSerializer,  # NEW: import the qp serializer
 )
 from core.permissions import IsBusinessUser, IsOfferOwner
 
@@ -67,14 +68,13 @@ class OfferListCreateView(generics.ListCreateAPIView):
     pagination_class = OfferPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["title", "description"]
-    ordering_fields = ["updated_at", "min_price"]
+    ordering_fields = ["updated_at", "min_price"]  # can order by annotated min_price
     ordering = ["-updated_at"]
 
     def get_permissions(self):
         if self.request.method.upper() == "POST":
             return [permissions.IsAuthenticated(), IsBusinessUser()]
         return [permissions.AllowAny()]
-    
 
     def get_serializer_class(self):
         if self.request.method.upper() == "POST":
@@ -82,21 +82,31 @@ class OfferListCreateView(generics.ListCreateAPIView):
         return OfferListSerializer
 
     def get_queryset(self):
-        qs = super().get_queryset()
-        qp = self.request.query_params
+        base_qs = super().get_queryset()
 
-        creator_id = qp.get("creator_id")
-        min_price = qp.get("min_price")
-        max_delivery_time = qp.get("max_delivery_time")
+        # Validate/coerce query params -> raises 400 on invalid instead of 500
+        qp_serializer = OfferListQueryParamsSerializer(data=self.request.query_params)
+        qp_serializer.is_valid(raise_exception=True)
+        params = qp_serializer.validated_data
 
-        if creator_id:
+        qs = base_qs
+
+        creator_id = params.get("creator_id")
+        min_price = params.get("min_price")
+        max_delivery_time = params.get("max_delivery_time")
+
+        if creator_id is not None:
             qs = qs.filter(owner_id=creator_id)
-        if min_price:
+        if min_price is not None:
             qs = qs.filter(details__price__gte=min_price)
-        if max_delivery_time:
+        if max_delivery_time is not None:
             qs = qs.filter(details__delivery_time_in_days__lte=max_delivery_time)
 
-        return qs.annotate(min_price=Min("details__price"))
+        # Annotate aggregates used by serializers and ordering
+        return qs.annotate(
+            min_price=Min("details__price"),
+            min_delivery_time=Min("details__delivery_time_in_days"),
+        )
 
 
 class OfferRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):

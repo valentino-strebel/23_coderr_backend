@@ -5,6 +5,7 @@
     listing, retrieval, and update (including nested detail handling).
 """
 
+from decimal import Decimal
 from django.db import transaction
 from django.db.models import Min
 from rest_framework import serializers
@@ -23,6 +24,15 @@ def _validate_features_list(value):
     if not all(isinstance(x, str) and x.strip() for x in value):
         raise serializers.ValidationError("Each feature must be a non-empty string.")
     return value
+
+
+# NEW: Query params validator for the list endpoint to ensure clean 400s on bad input
+class OfferListQueryParamsSerializer(serializers.Serializer):
+    creator_id = serializers.IntegerField(min_value=1, required=False)
+    min_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False
+    )
+    max_delivery_time = serializers.IntegerField(min_value=1, required=False)
 
 
 class OfferDetailSerializer(serializers.ModelSerializer):
@@ -145,9 +155,16 @@ class OfferListSerializer(serializers.ModelSerializer):
         ]
 
     def get_min_price(self, obj):
+        # Prefer annotation if present; fall back to aggregate
+        annotated = getattr(obj, "min_price", None)
+        if annotated is not None:
+            return annotated
         return obj.details.aggregate(min_val=Min("price"))["min_val"]
 
     def get_min_delivery_time(self, obj):
+        annotated = getattr(obj, "min_delivery_time", None)
+        if annotated is not None:
+            return annotated
         return obj.details.aggregate(min_val=Min("delivery_time_in_days"))["min_val"]
 
     def get_user_details(self, obj):

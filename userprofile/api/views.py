@@ -33,14 +33,14 @@ class ProfileRetrieveUpdateView(generics.RetrieveUpdateAPIView):
     """
     queryset = Profile.objects.select_related("user").all()
     serializer_class = ProfileSerializer
-    # Make intent explicit: require auth for all, owner for writes
     permission_classes = [IsAuthenticatedOnly, IsProfileOwnerOrReadOnly]
     parser_classes = [parsers.JSONParser, parsers.MultiPartParser, parsers.FormParser]
     lookup_field = "pk"
 
     def get_object(self):
-        # {pk} refers to the User's ID, not the Profile's PK
-        return get_object_or_404(self.get_queryset(), user_id=self.kwargs["pk"])
+        obj = get_object_or_404(self.get_queryset(), user_id=self.kwargs["pk"])
+        self.check_object_permissions(self.request, obj)  
+        return obj
 
 
 class BusinessProfileListView(generics.ListAPIView):
