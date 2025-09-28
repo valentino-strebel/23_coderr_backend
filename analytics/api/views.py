@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Avg
 from rest_framework import generics, status
 from rest_framework.response import Response
+from rest_framework.renderers import JSONRenderer
 
 from reviews.models import Review
 from offers.models import Offer
@@ -35,26 +36,17 @@ class BaseInfoView(generics.GenericAPIView):
     }
     """
 
-    authentication_classes = []  # No auth required
-    permission_classes = []      # Public endpoint
+    authentication_classes = []
+    permission_classes = []
+    renderer_classes = [JSONRenderer]
 
     def get(self, request):
         User = get_user_model()
 
-        # Count reviews
         review_count = Review.objects.count()
-
-        # Average rating (rounded to 1 decimal place)
         avg_rating = Review.objects.aggregate(avg=Avg("rating"))["avg"]
         average_rating = round(avg_rating, 1) if avg_rating is not None else 0.0
-
-        # Count business profiles
-        # Adjust logic depending on where you store the "business" flag
         business_profile_count = User.objects.filter(user_type="business").count()
-        # Or, if using profile relation:
-        # business_profile_count = User.objects.filter(profile__type="business").count()
-
-        # Count offers
         offer_count = Offer.objects.count()
 
         data = {
