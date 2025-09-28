@@ -244,10 +244,14 @@ class IsProfileOwnerOrReadOnly(IsOwnerOrReadOnly):
     """
     @permission IsProfileOwnerOrReadOnly
     @description
-        Allows read access to profiles, but write access only to the profile owner.
+        Request-level: user must be authenticated (inherited).
+        Object-level:
+            - SAFE_METHODS (GET/HEAD/OPTIONS): allowed to authenticated users.
+            - Write methods (PATCH/PUT/DELETE): only allowed when request.user.id == obj.user_id.
     """
     message = "You do not have permission to modify this profile."
     OWNER_ID_FIELD = "user_id"
+
 
 
 class IsOrderBusinessUser(BasePermission):
