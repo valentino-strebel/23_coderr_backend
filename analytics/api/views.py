@@ -46,7 +46,7 @@ class BaseInfoView(generics.GenericAPIView):
         review_count = Review.objects.count()
         avg_rating = Review.objects.aggregate(avg=Avg("rating"))["avg"]
         average_rating = round(avg_rating, 1) if avg_rating is not None else 0.0
-        business_profile_count = User.objects.filter(user_type="business").count()
+        business_profile_count = User.objects.filter(type=User.BUSINESS).count()
         offer_count = Offer.objects.count()
 
         data = {
